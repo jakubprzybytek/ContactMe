@@ -24,7 +24,12 @@ The form has three fields: **subject** (optional), **message** (required) and
    must be verified too; request production access to lift that restriction.
 2. **Google reCAPTCHA v3** — register the site at
    <https://www.google.com/recaptcha/admin> and note the site key and secret key.
-3. **AWS credentials** for local development and for GitHub Actions.
+   Add `contactme.albedoonline.com` and any stage subdomains you deploy to the
+   reCAPTCHA domain allowlist.
+3. **Amazon Route 53** — create a public hosted zone for `albedoonline.com` in
+   the deployment AWS account and point the domain's nameservers at that zone.
+   SST creates the DNS validation records, ACM certificate, and site alias.
+4. **AWS credentials** for local development and for GitHub Actions.
 
 ## Configuration
 
@@ -98,6 +103,9 @@ least once before using it.
 ```bash
 npx sst deploy --stage int
 ```
+
+The `int` stage is served at `contactme.albedoonline.com`. Other stages use
+`<stage>.contactme.albedoonline.com`.
 
 Pushes to `main` run the same command through
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).

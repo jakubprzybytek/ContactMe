@@ -15,6 +15,10 @@ export default $config({
     };
   },
   async run() {
+    const domain =
+      $app.stage === "int"
+        ? "contactme.albedoonline.com"
+        : `${$app.stage}.contactme.albedoonline.com`;
     const contactEmail = process.env.CONTACT_EMAIL;
     const senderEmail = process.env.SENDER_EMAIL;
     const recaptchaSiteKey = process.env.RECAPTCHA_SITE_KEY;
@@ -55,6 +59,7 @@ export default $config({
 
     const site = new sst.aws.StaticSite("Web", {
       path: "packages/web",
+      domain,
       build: {
         command: "npm run build",
         output: "dist",

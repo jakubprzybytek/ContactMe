@@ -45,6 +45,8 @@ manage all resources that the application uses:
 |---------|-----------|
 | **S3** | SST bootstrap bucket, static-site bucket |
 | **CloudFront** | Distribution, Origin Access Control |
+| **Route 53** | Custom-domain DNS and certificate validation records |
+| **ACM** | CloudFront TLS certificate |
 | **Lambda** | Function (`ContactApi`), function URLs |
 | **IAM** | Execution roles and inline policies for Lambda |
 | **SSM Parameter Store** | SST secrets and SST state parameters |
@@ -104,6 +106,33 @@ manage all resources that the application uses:
         "cloudfront:DeleteOriginAccessControl",
         "cloudfront:GetOriginAccessControl",
         "cloudfront:UpdateOriginAccessControl"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Route53",
+      "Effect": "Allow",
+      "Action": [
+        "route53:ChangeResourceRecordSets",
+        "route53:GetChange",
+        "route53:GetHostedZone",
+        "route53:ListHostedZones",
+        "route53:ListHostedZonesByName",
+        "route53:ListResourceRecordSets"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ACM",
+      "Effect": "Allow",
+      "Action": [
+        "acm:AddTagsToCertificate",
+        "acm:DeleteCertificate",
+        "acm:DescribeCertificate",
+        "acm:ListCertificates",
+        "acm:ListTagsForCertificate",
+        "acm:RemoveTagsFromCertificate",
+        "acm:RequestCertificate"
       ],
       "Resource": "*"
     },
