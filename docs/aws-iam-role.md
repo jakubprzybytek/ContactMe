@@ -6,8 +6,9 @@ that role.
 
 ## Trust Policy
 
-The trust policy allows the GitHub Actions OIDC provider to assume the role, scoped to the
-`jakubprzybytek/ContactMe` repository.
+The trust policy allows the GitHub Actions OIDC provider to assume the role, scoped to the `main`
+branch of the `jakubprzybytek/ContactMe` repository. GitHub's immutable subject uses the numeric
+owner and repository IDs so renaming either does not break or broaden the trust relationship.
 
 ```json
 {
@@ -21,10 +22,8 @@ The trust policy allows the GitHub Actions OIDC provider to assume the role, sco
       "Action": "sts:AssumeRoleWithWebIdentity",
       "Condition": {
         "StringEquals": {
-          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
-        },
-        "StringLike": {
-          "token.actions.githubusercontent.com:sub": "repo:jakubprzybytek/ContactMe:*"
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:sub": "repo:jakubprzybytek@90648/ContactMe@1319241785:ref:refs/heads/main"
         }
       }
     }
@@ -188,9 +187,9 @@ After creating the IAM role, configure the following in the GitHub repository se
 
 | Name | Type | Description |
 |------|------|-------------|
-| `AWS_ROLE_ARN` | Secret | ARN of the IAM role created above, e.g. `arn:aws:iam::<ACCOUNT_ID>:role/github-actions-contact-me` |
-| `CONTACT_EMAIL` | Secret | Destination mailbox for contact form submissions |
-| `SENDER_EMAIL` | Secret | SES-verified "From" address |
+| `AWS_ROLE_ARN` | Variable | ARN of the IAM role created above, e.g. `arn:aws:iam::<ACCOUNT_ID>:role/github-actions-contact-me` |
+| `CONTACT_EMAIL` | Variable | Destination mailbox for contact form submissions |
+| `SENDER_EMAIL` | Variable | SES-verified "From" address |
 | `RECAPTCHA_SECRET_KEY` | Secret | Google reCAPTCHA v3 server-side secret key |
-| `RECAPTCHA_SITE_KEY` | Secret | Google reCAPTCHA v3 client-side site key |
+| `RECAPTCHA_SITE_KEY` | Variable | Google reCAPTCHA v3 client-side site key |
 | `AWS_REGION` | Variable | AWS region to deploy to (defaults to `eu-central-1`) |

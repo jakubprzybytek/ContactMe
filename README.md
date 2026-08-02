@@ -28,36 +28,49 @@ The form has three fields: **subject** (optional), **message** (required) and
 
 ## Configuration
 
-Values are stored as SST secrets, never in the repository:
+Only the server-side reCAPTCHA key is stored as an SST secret:
 
 | Secret | Purpose |
 | --- | --- |
-| `ContactEmail` | Mailbox that receives the submissions |
-| `SenderEmail` | SES verified identity used as the `From` address |
 | `RecaptchaSecretKey` | reCAPTCHA server-side key |
-| `RecaptchaSiteKey` | reCAPTCHA public site key, injected into the frontend build |
 
-Set them per stage:
+Set it per stage:
 
 ```bash
-npx sst secret set ContactEmail me@example.com --stage int
-npx sst secret set SenderEmail no-reply@example.com --stage int
 npx sst secret set RecaptchaSecretKey ... --stage int
-npx sst secret set RecaptchaSiteKey ... --stage int
 ```
 
-The AWS region defaults to `eu-central-1` and can be overridden with the
-`AWS_REGION` environment variable.
+The remaining configuration is supplied as ordinary environment variables:
 
-## GitHub secrets used by the deploy workflow
+| Variable | Purpose |
+| --- | --- |
+| `CONTACT_EMAIL` | Mailbox that receives submissions |
+| `SENDER_EMAIL` | SES verified identity used as the `From` address |
+| `RECAPTCHA_SITE_KEY` | Public reCAPTCHA key injected into the frontend build |
+| `AWS_REGION` | AWS region; defaults to `eu-central-1` |
 
-- `AWS_ROLE_ARN` (preferred, OIDC) **or** `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`
+For local development or deployment, export the three required values before
+running SST:
+
+```bash
+export CONTACT_EMAIL=me@example.com
+export SENDER_EMAIL=no-reply@example.com
+export RECAPTCHA_SITE_KEY=...
+```
+
+## GitHub Actions configuration
+
+Repository variables:
+
+- `AWS_ROLE_ARN` — IAM role assumed through GitHub OIDC
 - `CONTACT_EMAIL`
 - `SENDER_EMAIL`
-- `RECAPTCHA_SECRET_KEY`
 - `RECAPTCHA_SITE_KEY`
+- `AWS_REGION`
 
-Optional repository variable `AWS_REGION` selects the deployment region.
+Repository secret:
+
+- `RECAPTCHA_SECRET_KEY`
 
 ## Local development
 

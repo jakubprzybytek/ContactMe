@@ -140,8 +140,8 @@ async function sendEmail(contact: ParsedContact): Promise<void> {
 
   await ses.send(
     new SendEmailCommand({
-      FromEmailAddress: Resource.SenderEmail.value,
-      Destination: { ToAddresses: [Resource.ContactEmail.value] },
+      FromEmailAddress: process.env.SENDER_EMAIL,
+      Destination: { ToAddresses: [process.env.CONTACT_EMAIL!] },
       ReplyToAddresses: contact.email ? [contact.email] : undefined,
       Content: {
         Simple: {
