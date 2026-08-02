@@ -8,7 +8,7 @@ contact form. Built with [SST v4](https://sst.dev).
 | Piece | Implementation |
 | --- | --- |
 | Frontend | React + Vite SPA (`packages/web`) deployed as an `sst.aws.StaticSite` (S3 + CloudFront) |
-| API | Lambda function URL (`packages/functions/src/contact.ts`), `POST` only |
+| API | Lambda function URL behind an `sst.aws.Router` custom domain, `POST` only |
 | Spam protection | Google reCAPTCHA v3, verified server side |
 | Email delivery | Amazon SES v2 (`SendEmail`), reply-to set to the sender's address when provided |
 | Infrastructure | `sst.config.ts` |
@@ -28,7 +28,8 @@ The form has three fields: **subject** (optional), **message** (required) and
    reCAPTCHA domain allowlist.
 3. **Amazon Route 53** — create a public hosted zone for `albedoonline.com` in
    the deployment AWS account and point the domain's nameservers at that zone.
-   SST creates the DNS validation records, ACM certificate, and site alias.
+   SST creates the DNS validation records, a shared ACM certificate for the web
+   and API domains, and their aliases.
 4. **AWS credentials** for local development and for GitHub Actions.
 
 ## Configuration
@@ -104,17 +105,19 @@ least once before using it.
 npx sst deploy --stage int
 ```
 
-The `int` stage is served at `contactme.albedoonline.com`. Other stages use
-`<stage>.contactme.albedoonline.com`.
+The `int` stage uses `contactme.albedoonline.com` for the web app and
+`api.contactme.albedoonline.com` for the API. Other stages use
+`<stage>.contactme.albedoonline.com` and
+`api.<stage>.contactme.albedoonline.com`, respectively.
 
 Pushes to `main` run the same command through
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
 
 ## Notes
 
-- The function URL accepts requests from any origin because the CloudFront domain
-  of the static site is only known after the function is created. No cookies or
-  credentials are used; submissions are gated by reCAPTCHA and validated server
-  side (length limits, email format, header-injection stripping).
+- The function URL is exposed through a CloudFront router on the API custom
+   domain. CORS only allows the corresponding web custom domain. Submissions are
+   gated by reCAPTCHA and validated server side (length limits, email format,
+   header-injection stripping).
 - Emails are sent as plain text so that submitted content cannot inject HTML into
   the mailbox.

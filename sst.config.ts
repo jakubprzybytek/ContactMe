@@ -15,10 +15,11 @@ export default $config({
     };
   },
   async run() {
-    const domain =
+    const webDomain =
       $app.stage === "int"
         ? "contactme.albedoonline.com"
         : `${$app.stage}.contactme.albedoonline.com`;
+    const apiDomain = `api.${webDomain}`;
     const contactEmail = process.env.CONTACT_EMAIL;
     const senderEmail = process.env.SENDER_EMAIL;
     const recaptchaSiteKey = process.env.RECAPTCHA_SITE_KEY;
@@ -29,10 +30,22 @@ export default $config({
     }
 
     const recaptchaSecretKey = new sst.Secret("RecaptchaSecretKey");
+    const usEast1 = new aws.Provider("UsEast1", {
+      region: "us-east-1",
+    });
+    const certificate = new sst.aws.DnsValidatedCertificate(
+      "SharedCertificate",
+      {
+        domainName: webDomain,
+        alternativeNames: [apiDomain],
+        dns: sst.aws.dns(),
+      },
+      { provider: usEast1 },
+    );
 
     const api = new sst.aws.Function("ContactApi", {
       handler: "packages/functions/src/contact.handler",
-      runtime: "nodejs22.x",
+      runtime: "nodejs24.x",
       timeout: "20 seconds",
       link: [recaptchaSecretKey],
       environment: {
@@ -47,31 +60,41 @@ export default $config({
       ],
       url: {
         cors: {
-          // The static site is served from a CloudFront domain that is only
-          // known after this function is created, so the public form endpoint
-          // accepts any origin. No credentials or cookies are used.
-          allowOrigins: ["*"],
+          allowOrigins: [`https://${webDomain}`],
           allowMethods: ["POST"],
           allowHeaders: ["content-type"],
         },
       },
     });
 
+    const apiRouter = new sst.aws.Router("ApiRouter", {
+      domain: {
+        name: apiDomain,
+        cert: certificate.arn,
+      },
+      routes: {
+        "/*": api.url,
+      },
+    });
+
     const site = new sst.aws.StaticSite("Web", {
       path: "packages/web",
-      domain,
+      domain: {
+        name: webDomain,
+        cert: certificate.arn,
+      },
       build: {
         command: "npm run build",
         output: "dist",
       },
       environment: {
-        VITE_API_URL: api.url,
+        VITE_API_URL: apiRouter.url,
         VITE_RECAPTCHA_SITE_KEY: recaptchaSiteKey,
       },
     });
 
     return {
-      api: api.url,
+      api: apiRouter.url,
       site: site.url,
     };
   },

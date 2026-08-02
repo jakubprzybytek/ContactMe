@@ -44,7 +44,7 @@ manage all resources that the application uses:
 | Service | Resources |
 |---------|-----------|
 | **S3** | SST bootstrap bucket, static-site bucket |
-| **CloudFront** | Distribution, Origin Access Control |
+| **CloudFront** | Distributions, functions, cache policies, KeyValueStore, Origin Access Control |
 | **Route 53** | Custom-domain DNS and certificate validation records |
 | **ACM** | CloudFront TLS certificate |
 | **Lambda** | Function (`ContactApi`), function URLs |
@@ -102,10 +102,39 @@ manage all resources that the application uses:
         "cloudfront:UntagResource",
         "cloudfront:ListTagsForResource",
         "cloudfront:CreateInvalidation",
+        "cloudfront:CreateCachePolicy",
+        "cloudfront:DeleteCachePolicy",
+        "cloudfront:GetCachePolicy",
+        "cloudfront:UpdateCachePolicy",
+        "cloudfront:CreateFunction",
+        "cloudfront:DeleteFunction",
+        "cloudfront:DescribeFunction",
+        "cloudfront:GetFunction",
+        "cloudfront:ListFunctions",
+        "cloudfront:PublishFunction",
+        "cloudfront:UpdateFunction",
+        "cloudfront:CreateKeyValueStore",
+        "cloudfront:DeleteKeyValueStore",
+        "cloudfront:DescribeKeyValueStore",
+        "cloudfront:ListKeyValueStores",
+        "cloudfront:UpdateKeyValueStore",
         "cloudfront:CreateOriginAccessControl",
         "cloudfront:DeleteOriginAccessControl",
         "cloudfront:GetOriginAccessControl",
         "cloudfront:UpdateOriginAccessControl"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudFrontKeyValueStore",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront-keyvaluestore:DeleteKey",
+        "cloudfront-keyvaluestore:DescribeKeyValueStore",
+        "cloudfront-keyvaluestore:GetKey",
+        "cloudfront-keyvaluestore:ListKeys",
+        "cloudfront-keyvaluestore:PutKey",
+        "cloudfront-keyvaluestore:UpdateKeys"
       ],
       "Resource": "*"
     },
