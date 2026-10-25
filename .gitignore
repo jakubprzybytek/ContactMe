@@ -6,3 +6,6 @@ dist
 !.env.example
 *.log
 .DS_Store
+
+# AWS IAM documents with the account number
+infra/github/private/

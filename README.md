@@ -66,16 +66,18 @@ export RECAPTCHA_SITE_KEY=...
 
 ## GitHub Actions configuration
 
+The deploy workflow signs in to AWS through GitHub OIDC as the IAM role `GitHub-ContactMe`; no AWS access keys are stored in GitHub. The role and its permissions are described in [infra/github/README.md](infra/github/README.md).
+
 Repository variables:
 
-- `AWS_ROLE_ARN` — IAM role assumed through GitHub OIDC
+- `AWS_REGION`
 - `CONTACT_EMAIL`
 - `SENDER_EMAIL`
 - `RECAPTCHA_SITE_KEY`
-- `AWS_REGION`
 
-Repository secret:
+Repository secrets:
 
+- `AWS_ACCOUNT_ID`: AWS account number, used to build the role ARN
 - `RECAPTCHA_SECRET_KEY`
 
 ## Local development
