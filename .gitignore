@@ -9,3 +9,7 @@ dist
 
 # AWS IAM documents with the account number
 infra/github/private/
+
+# Playwright
+test-results/
+playwright-report/

@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from "react";
-import { getRecaptchaToken } from "./recaptcha";
+import { getRecaptchaToken, recaptchaSiteKey } from "./recaptcha";
 import "./App.css";
 
 const API_URL: string = import.meta.env.VITE_API_URL ?? "";
+const APP_VERSION: string = import.meta.env.VITE_APP_VERSION ?? "local";
 
 const MAX_SUBJECT_LENGTH = 200;
 const MAX_MESSAGE_LENGTH = 5000;
@@ -142,11 +143,15 @@ export default function App() {
         )}
       </form>
 
-      <p className="legal">
-        This site is protected by reCAPTCHA and the Google{" "}
-        <a href="https://policies.google.com/privacy">Privacy Policy</a> and{" "}
-        <a href="https://policies.google.com/terms">Terms of Service</a> apply.
-      </p>
+      {recaptchaSiteKey && (
+        <p className="legal">
+          This site is protected by reCAPTCHA and the Google{" "}
+          <a href="https://policies.google.com/privacy">Privacy Policy</a> and{" "}
+          <a href="https://policies.google.com/terms">Terms of Service</a> apply.
+        </p>
+      )}
+
+      <p className="version">{APP_VERSION}</p>
     </main>
   );
 }

@@ -6,6 +6,19 @@
 
 declare module "sst" {
   export interface Resource {
+    "ApiRouter": {
+      "type": "sst.aws.Router"
+      "url": string
+    }
+    "ContactApi": {
+      "name": string
+      "type": "sst.aws.Function"
+      "url": string
+    }
+    "Web": {
+      "type": "sst.aws.StaticSite"
+      "url": string
+    }
   }
 }
 

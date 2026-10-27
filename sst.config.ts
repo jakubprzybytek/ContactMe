@@ -1,11 +1,14 @@
 /// <reference path="./.sst/platform/config.d.ts" />
 
+// Stages per agent-playbook/continuous-delivery: dev (yours), int (the pipeline's tests), prod (live).
+const ROOT_DOMAIN = "contactme.albedoonline.com";
+
 export default $config({
   app(input) {
     return {
       name: "contact-me",
-      removal: input?.stage === "production" ? "retain" : "remove",
-      protect: ["production"].includes(input?.stage),
+      removal: input?.stage === "prod" ? "retain" : "remove",
+      protect: input?.stage === "prod",
       home: "aws",
       providers: {
         aws: {
@@ -15,21 +18,27 @@ export default $config({
     };
   },
   async run() {
-    const webDomain =
-      $app.stage === "int"
-        ? "contactme.albedoonline.com"
-        : `${$app.stage}.contactme.albedoonline.com`;
+    // The one place that decides what differs per stage. Off prod, the form neither checks reCAPTCHA
+    // nor sends email: the function logs the submission and answers { ok: true, delivered: false }.
+    const isProd = $app.stage === "prod";
+
+    const webDomain = isProd ? ROOT_DOMAIN : `${$app.stage}.${ROOT_DOMAIN}`;
     const apiDomain = `api.${webDomain}`;
-    const contactEmail = process.env.CONTACT_EMAIL;
-    const senderEmail = process.env.SENDER_EMAIL;
-    const recaptchaSiteKey = process.env.RECAPTCHA_SITE_KEY;
-    if (!contactEmail || !senderEmail || !recaptchaSiteKey) {
-      throw new Error(
-        "CONTACT_EMAIL, SENDER_EMAIL, and RECAPTCHA_SITE_KEY must be set.",
-      );
+
+    let delivery: { recaptchaSecretKey: sst.Secret; contactEmail: string; senderEmail: string; recaptchaSiteKey: string } | undefined;
+    if (isProd) {
+      const { CONTACT_EMAIL, SENDER_EMAIL, RECAPTCHA_SITE_KEY } = process.env;
+      if (!CONTACT_EMAIL || !SENDER_EMAIL || !RECAPTCHA_SITE_KEY) {
+        throw new Error("prod needs CONTACT_EMAIL, SENDER_EMAIL and RECAPTCHA_SITE_KEY.");
+      }
+      delivery = {
+        recaptchaSecretKey: new sst.Secret("RecaptchaSecretKey"),
+        contactEmail: CONTACT_EMAIL,
+        senderEmail: SENDER_EMAIL,
+        recaptchaSiteKey: RECAPTCHA_SITE_KEY,
+      };
     }
 
-    const recaptchaSecretKey = new sst.Secret("RecaptchaSecretKey");
     const usEast1 = new aws.Provider("UsEast1", {
       region: "us-east-1",
     });
@@ -47,20 +56,15 @@ export default $config({
       handler: "packages/functions/src/contact.handler",
       runtime: "nodejs24.x",
       timeout: "20 seconds",
-      link: [recaptchaSecretKey],
-      environment: {
-        CONTACT_EMAIL: contactEmail,
-        SENDER_EMAIL: senderEmail,
-      },
-      permissions: [
-        {
-          actions: ["ses:SendEmail"],
-          resources: ["*"],
-        },
-      ],
+      link: delivery ? [delivery.recaptchaSecretKey] : [],
+      environment: delivery
+        ? { DELIVERY: "email", CONTACT_EMAIL: delivery.contactEmail, SENDER_EMAIL: delivery.senderEmail }
+        : { DELIVERY: "log" },
+      permissions: delivery ? [{ actions: ["ses:SendEmail"], resources: ["*"] }] : [],
       url: {
         cors: {
-          allowOrigins: [`https://${webDomain}`],
+          // Off prod also the local Vite dev server.
+          allowOrigins: isProd ? [`https://${webDomain}`] : [`https://${webDomain}`, "http://localhost:5173"],
           allowMethods: ["POST"],
           allowHeaders: ["content-type"],
         },
@@ -89,7 +93,10 @@ export default $config({
       },
       environment: {
         VITE_API_URL: apiRouter.url,
-        VITE_RECAPTCHA_SITE_KEY: recaptchaSiteKey,
+        // Empty off prod: the page doesn't load reCAPTCHA.
+        VITE_RECAPTCHA_SITE_KEY: delivery?.recaptchaSiteKey ?? "",
+        // The release shown in the footer: the tag (v0.1, …) from the pipeline, "local" otherwise.
+        VITE_APP_VERSION: process.env.APP_VERSION ?? "local",
       },
     });
 

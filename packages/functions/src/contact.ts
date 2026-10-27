@@ -14,6 +14,14 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const ses = new SESv2Client({});
 
+/**
+ * "email" (prod): reCAPTCHA is checked and the message is sent with SES.
+ * "log" (dev, int): no reCAPTCHA, no email; the submission is logged and answered with delivered: false.
+ */
+function deliveryMode(): "email" | "log" {
+  return process.env.DELIVERY === "email" ? "email" : "log";
+}
+
 type ContactRequest = {
   subject?: unknown;
   message?: unknown;
@@ -51,7 +59,10 @@ function sanitizeHeaderValue(value: string): string {
   return value.replace(/[\r\n\u0000-\u001f\u007f]/g, " ").trim();
 }
 
-function parseRequest(rawBody: string | undefined): ParsedContact | string {
+export function parseRequest(
+  rawBody: string | undefined,
+  requireCaptcha: boolean,
+): ParsedContact | string {
   let payload: ContactRequest;
   try {
     payload = JSON.parse(rawBody ?? "") as ContactRequest;
@@ -81,7 +92,7 @@ function parseRequest(rawBody: string | undefined): ParsedContact | string {
   }
 
   const recaptchaToken = asTrimmedString(payload.recaptchaToken);
-  if (!recaptchaToken) {
+  if (requireCaptcha && !recaptchaToken) {
     return "Captcha verification is required.";
   }
 
@@ -164,9 +175,19 @@ export async function handler(
     ? Buffer.from(event.body, "base64").toString("utf8")
     : event.body;
 
-  const parsed = parseRequest(rawBody);
+  const mode = deliveryMode();
+  const parsed = parseRequest(rawBody, mode === "email");
   if (typeof parsed === "string") {
     return response(400, { ok: false, error: parsed });
+  }
+
+  if (mode === "log") {
+    console.info("Contact submission (not delivered on this stage)", {
+      subjectLength: parsed.subject.length,
+      messageLength: parsed.message.length,
+      hasEmail: Boolean(parsed.email),
+    });
+    return response(200, { ok: true, delivered: false });
   }
 
   try {
@@ -182,7 +203,7 @@ export async function handler(
     }
 
     await sendEmail(parsed);
-    return response(200, { ok: true });
+    return response(200, { ok: true, delivered: true });
   } catch (error) {
     console.error("Failed to handle contact submission", error);
     return response(500, {

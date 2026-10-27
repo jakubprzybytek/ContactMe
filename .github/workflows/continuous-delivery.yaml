@@ -1,0 +1,156 @@
+# Continuous delivery per agent-playbook/continuous-delivery.
+# From main (every push, or a manual run with main selected): checks -> deploy int -> integration + E2E tests
+#   -> tag the next release vM.N -> deploy prod from the tag.
+# From any other branch or tag (manual run, "Use workflow from"): the same checks, int deploy and tests, then prod,
+#   all from that ref, without a new version or tag (rollback: pick the release tag, v0.1 or later).
+# Needs the repo secret AWS_ACCOUNT_ID and variable AWS_REGION (aws-github-deploy's setup-role.sh sets both);
+# prod also the variables CONTACT_EMAIL, SENDER_EMAIL, RECAPTCHA_SITE_KEY and the secret RECAPTCHA_SECRET_KEY.
+
+name: Continuous Delivery
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**/*.md", "docs/**"]
+  workflow_dispatch:
+    inputs:
+      major:
+        description: Bump major version number and release as v(N+1).0
+        type: boolean
+        default: false
+
+concurrency:
+  group: cd
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  int:
+    name: Deploy int + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # push the release tag
+      id-token: write # OIDC -> AWS
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # tags and history for the next version
+
+      # From main, releases only go forward: the latest vM.N tag + 1 (v0.147 -> v0.148); the first release is v0.1.
+      # The `major` input releases v(M+1).0 instead. A commit that already has a tag (a re-run) keeps it.
+      # From another ref: no new version; the app shows the tag name, or <branch>-<short sha>.
+      - id: version
+        env:
+          MAJOR: ${{ inputs.major || false }}
+        run: |
+          tags() { git tag "$@" --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+$' | head -n1 || true; }
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            if [ "$GITHUB_REF_TYPE" = tag ]; then version="$GITHUB_REF_NAME"; else version="${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::7}"; fi
+            echo "version=$version" >> "$GITHUB_OUTPUT"; echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "Deploying $GITHUB_REF as $version, no release"; exit 0
+          fi
+          echo "release=true" >> "$GITHUB_OUTPUT"
+          current=$(tags --points-at HEAD)
+          if [ -n "$current" ]; then echo "version=$current" >> "$GITHUB_OUTPUT"; echo "HEAD already tagged $current"; exit 0; fi
+          last=$(tags)
+          m=${last%%.*}; m=${m#v}; n=${last#*.}
+          if [ -z "$last" ]; then version=v0.1
+          elif [ "$MAJOR" = "true" ]; then version="v$(( m + 1 )).0"
+          else version="v$m.$(( n + 1 ))"; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "${last:-none} -> $version"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHub-ContactMe
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: gh-contactme-${{ github.run_id }}
+          mask-aws-account-id: true
+
+      - name: Deploy int
+        run: npx sst deploy --stage int
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+
+      # Inside sst shell: the tests get int's URLs (Resource.ApiRouter, Resource.Web). Off prod the form needs no
+      # captcha and messages are logged, not emailed. No login, so no test user (docs/development.md, Deviations).
+      - name: Integration tests
+        run: npx sst shell --stage int -- npm run test:integration
+      - run: npx playwright install --with-deps chromium
+      - name: E2E tests
+        run: npx sst shell --stage int -- npm run test:e2e
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 3
+
+      - name: Tag ${{ steps.version.outputs.version }}
+        if: steps.version.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/$VERSION" > /dev/null; then echo "$VERSION already tagged"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
+
+  prod:
+    name: Deploy prod
+    needs: int
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # OIDC -> AWS
+    env:
+      VERSION: ${{ needs.int.outputs.version }}
+    steps:
+      # A release deploys from its tag; any other ref from the commit int was tested on.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.int.outputs.release == 'true' && format('refs/tags/{0}', needs.int.outputs.version) || github.sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHub-ContactMe
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: gh-contactme-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Set reCAPTCHA secret
+        run: npx sst secret set RecaptchaSecretKey "$RECAPTCHA_SECRET_KEY" --stage prod
+        env:
+          RECAPTCHA_SECRET_KEY: ${{ secrets.RECAPTCHA_SECRET_KEY }}
+      - name: Deploy prod
+        run: npx sst deploy --stage prod
+        env:
+          APP_VERSION: ${{ env.VERSION }}
+          CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
+          SENDER_EMAIL: ${{ vars.SENDER_EMAIL }}
+          RECAPTCHA_SITE_KEY: ${{ vars.RECAPTCHA_SITE_KEY }}
+      # No submission on prod (it would email a real inbox): the site and the API answer.
+      - name: Site and API answer
+        run: |
+          curl -fsS -o /dev/null https://contactme.albedoonline.com/
+          test "$(curl -s -o /dev/null -w '%{http_code}' https://api.contactme.albedoonline.com/)" = 405

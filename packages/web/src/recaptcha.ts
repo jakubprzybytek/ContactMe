@@ -45,9 +45,11 @@ function loadScript(): Promise<void> {
 }
 
 /**
- * Loads reCAPTCHA v3 on demand and returns a token for the given action.
+ * Loads reCAPTCHA v3 on demand and returns a token for the given action ("" when reCAPTCHA is off).
  */
 export async function getRecaptchaToken(action: string): Promise<string> {
+  // No site key (dev, int): reCAPTCHA is off and the API doesn't ask for a token.
+  if (!recaptchaSiteKey) return "";
   await loadScript();
 
   const grecaptcha = window.grecaptcha;

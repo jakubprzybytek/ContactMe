@@ -82,3 +82,9 @@
   font-size: 0.8rem;
   color: #777;
 }
+
+.version {
+  margin-top: 1rem;
+  font-size: 0.75rem;
+  color: #999;
+}

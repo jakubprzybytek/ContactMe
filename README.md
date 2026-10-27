@@ -12,7 +12,7 @@ contact form. Built with [SST v4](https://sst.dev).
 | Spam protection | Google reCAPTCHA v3, verified server side |
 | Email delivery | Amazon SES v2 (`SendEmail`), reply-to set to the sender's address when provided |
 | Infrastructure | `sst.config.ts` |
-| Delivery | GitHub Actions deploys `main` to the `int` stage |
+| Delivery | [Continuous Delivery](.github/workflows/continuous-delivery.yaml): `int`, tests, release tag, `prod` ([docs/development.md](docs/development.md)) |
 
 The form has three fields: **subject** (optional), **message** (required) and
 **email** (optional, used as the `Reply-To` address).
@@ -24,8 +24,8 @@ The form has three fields: **subject** (optional), **message** (required) and
    must be verified too; request production access to lift that restriction.
 2. **Google reCAPTCHA v3** — register the site at
    <https://www.google.com/recaptcha/admin> and note the site key and secret key.
-   Add `contactme.albedoonline.com` and any stage subdomains you deploy to the
-   reCAPTCHA domain allowlist.
+   Add `contactme.albedoonline.com` (prod) to the reCAPTCHA domain allowlist; `dev` and
+   `int` don't use reCAPTCHA.
 3. **Amazon Route 53** — create a public hosted zone for `albedoonline.com` in
    the deployment AWS account and point the domain's nameservers at that zone.
    SST creates the DNS validation records, a shared ACM certificate for the web
@@ -40,10 +40,10 @@ Only the server-side reCAPTCHA key is stored as an SST secret:
 | --- | --- |
 | `RecaptchaSecretKey` | reCAPTCHA server-side key |
 
-Set it per stage:
+Only prod uses it (the pipeline sets it from the GitHub secret `RECAPTCHA_SECRET_KEY`):
 
 ```bash
-npx sst secret set RecaptchaSecretKey ... --stage int
+npx sst secret set RecaptchaSecretKey ... --stage prod
 ```
 
 The remaining configuration is supplied as ordinary environment variables:
@@ -53,10 +53,9 @@ The remaining configuration is supplied as ordinary environment variables:
 | `CONTACT_EMAIL` | Mailbox that receives submissions |
 | `SENDER_EMAIL` | SES verified identity used as the `From` address |
 | `RECAPTCHA_SITE_KEY` | Public reCAPTCHA key injected into the frontend build |
-| `AWS_REGION` | AWS region; defaults to `eu-central-1` |
+| `AWS_REGION` | AWS region; defaults to `eu-west-1` |
 
-For local development or deployment, export the three required values before
-running SST:
+prod needs these three at deploy time; `dev` and `int` need none of them:
 
 ```bash
 export CONTACT_EMAIL=me@example.com
@@ -66,7 +65,7 @@ export RECAPTCHA_SITE_KEY=...
 
 ## GitHub Actions configuration
 
-The deploy workflow signs in to AWS through GitHub OIDC as the IAM role `GitHub-ContactMe`; no AWS access keys are stored in GitHub. The role and its permissions are described in [infra/github/README.md](infra/github/README.md).
+The delivery workflow signs in to AWS through GitHub OIDC as the IAM role `GitHub-ContactMe`; no AWS access keys are stored in GitHub. The role and its permissions are described in [infra/github/README.md](infra/github/README.md).
 
 Repository variables:
 
@@ -78,48 +77,23 @@ Repository variables:
 Repository secrets:
 
 - `AWS_ACCOUNT_ID`: AWS account number, used to build the role ARN
-- `RECAPTCHA_SECRET_KEY`
+- `RECAPTCHA_SECRET_KEY`: copied into prod's SST secret `RecaptchaSecretKey` on each prod deploy
 
-## Local development
+## Local development, tests and deployment
+
+Stages (`dev`, `int`, `prod`), commands, tests, delivery and rollback: [docs/development.md](docs/development.md).
 
 ```bash
 npm install
-npx sst dev
+npm run deploy -- --stage dev     # or: npm run dev -- --stage dev (sst dev)
+npm run typecheck && npm test
 ```
-
-`sst dev` provisions the infrastructure for your personal stage and runs the Vite
-dev server with `VITE_API_URL` and `VITE_RECAPTCHA_SITE_KEY` wired up.
-
-## Build, lint and typecheck
-
-```bash
-npm run build   # typechecks and builds the frontend
-npm run lint    # oxlint on the frontend
-```
-
-The Lambda typecheck (`npm run typecheck -w @contact-me/functions`) relies on the
-resource types SST generates into `.sst/`, so run `sst dev` or `sst deploy` at
-least once before using it.
-
-## Deployment
-
-```bash
-npx sst deploy --stage int
-```
-
-The `int` stage uses `contactme.albedoonline.com` for the web app and
-`api.contactme.albedoonline.com` for the API. Other stages use
-`<stage>.contactme.albedoonline.com` and
-`api.<stage>.contactme.albedoonline.com`, respectively.
-
-Pushes to `main` run the same command through
-[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
 
 ## Notes
 
 - The function URL is exposed through a CloudFront router on the API custom
-   domain. CORS only allows the corresponding web custom domain. Submissions are
-   gated by reCAPTCHA and validated server side (length limits, email format,
+   domain. CORS only allows the corresponding web custom domain (plus localhost off prod).
+   On prod submissions are gated by reCAPTCHA and validated server side (length limits, email format,
    header-injection stripping).
 - Emails are sent as plain text so that submitted content cannot inject HTML into
   the mailbox.
