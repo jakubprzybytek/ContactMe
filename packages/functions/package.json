@@ -11,7 +11,7 @@
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.162",
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.6.3",
     "sst": "^4.17.1",
     "typescript": "~6.0.2"
   }
