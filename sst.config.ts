@@ -61,6 +61,10 @@ export default $config({
         ? { DELIVERY: "email", CONTACT_EMAIL: delivery.contactEmail, SENDER_EMAIL: delivery.senderEmail }
         : { DELIVERY: "log" },
       permissions: delivery ? [{ actions: ["ses:SendEmail"], resources: ["*"] }] : [],
+      // The most copies that may run at once (agent-playbook aws-app-guidelines): bounds what a flood of
+      // requests can cost and keeps a scan from taking the account's shared Lambda capacity. prod normally
+      // runs 1 (14 in a scan); off prod the E2E tests run in parallel.
+      concurrency: { reserved: 5 },
       url: {
         cors: {
           // Off prod also the local Vite dev server.
