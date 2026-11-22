@@ -20,7 +20,7 @@
     "@playwright/test": "^1.65.0",
     "@types/node": "^24.19.2",
     "sst": "^4.17.2",
-    "typescript": "~6.0.2",
+    "typescript": "~7.0.2",
     "vitest": "^5.0.5"
   }
 }
